@@ -1,39 +1,37 @@
 from langchain_groq import ChatGroq
 from langchain.schema import HumanMessage
+from query_validation import QueryValidator
 import os
 import nltk
-from typing import Tuple
 
 # Download required NLTK data
 nltk.download('punkt', quiet=True)
+nltk.download('stopwords', quiet=True)
 
-def generate_sql(schema: str, question: str) -> Tuple[str, list]:
-    """Generate SQL from natural language using Groq's Llama 3."""
+validator = QueryValidator()
+
+def generate_sql(schema: str, question: str):
+    # Validate question
+    validation = validator.validate(question)
+    if not validation['is_safe']:
+        raise ValueError(f"Invalid query: {validation.get('warning', 'Unknown error')}")
     
-    # Tokenize input for analysis
-    tokens = nltk.word_tokenize(question)
-    print(f"Tokens: {tokens}")  # For dev console
-
     # Create chat client
     chat = ChatGroq(
         groq_api_key=os.getenv("GROQ_API_KEY"),
         model_name="llama3-8b-8192"
     )
     
-    # Construct prompt
     prompt = f"""Given this database schema:
 {schema}
 
 Convert this question to SQL: {question}
 
 Rules:
-1. Return ONLY the SQL query, no explanations
+1. Return ONLY the SQL query
 2. Use proper SQL syntax
 3. Include necessary JOINs
 4. Add appropriate WHERE clauses"""
 
-    # Get response
     response = chat([HumanMessage(content=prompt)])
-    sql = response.content.strip()
-    
-    return sql, tokens
+    return response.content.strip(), nltk.word_tokenize(question)
